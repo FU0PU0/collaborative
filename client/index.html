@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Kaomoji Chat</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    
+    <div class="chat-container">
+      <div class="chat-window" id="chatWindow"></div>
+
+      <div class="kaomoji-bar" id="kaomojiBar"></div>
+
+      <div class="input-bar">
+        <textarea
+          id="chatInput"
+          rows="2"
+          placeholder="輸入顏文字或自己打 (T_T)…"
+        ></textarea>
+        <button id="sendBtn">送出</button>
+      </div>
+    </div>
+
+    
+    <script>
+      const PRESET_KAOMOJI = [
+        "(^_^)",
+        "(T_T)",
+        "(=^･ω･^=)",
+        "┬─┬ ノ( ゜-゜ノ)",
+        "(´・ω・`)",
+        "(╯°□°）╯︵ ┻━┻",
+      ];
+
+      
+      let ws;
+
+      
+      const myId = "user-" + Math.random().toString(36).slice(2);
+
+      
+      const seenIds = new Set();
+
+      
+      let chatWindow;
+      let chatInput;
+      let sendBtn;
+      let kaomojiBar;
+
+      
+      function setup() {
+        chatWindow = document.getElementById("chatWindow");
+        chatInput = document.getElementById("chatInput");
+        sendBtn = document.getElementById("sendBtn");
+        kaomojiBar = document.getElementById("kaomojiBar");
+
+        
+        PRESET_KAOMOJI.forEach((k) => {
+          const btn = document.createElement("button");
+          btn.textContent = k;
+          btn.className = "kaomoji-btn";
+          btn.addEventListener("click", () => {
+            chatInput.value = chatInput.value ? chatInput.value + " " + k : k;
+            chatInput.focus();
+          });
+          kaomojiBar.appendChild(btn);
+        });
+
+        
+        ws = new WebSocket("wss:https://collaborative-5d97.onrender.com");
+        
+
+        ws.onopen = () => {
+          console.log("WebSocket connected");
+        };
+
+        ws.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.type !== "chat") return;
+
+            
+            if (data.id && seenIds.has(data.id)) return;
+            if (data.id) seenIds.add(data.id);
+
+            addMessageToChat(data);
+          } catch (err) {
+            console.error("Parse error:", err);
+          }
+        };
+
+        ws.onclose = () => {
+          console.log("WebSocket disconnected");
+        };
+
+        
+        sendBtn.addEventListener("click", sendMessage);
+
+       
+        chatInput.addEventListener("keydown", (e) => {
+          if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+          }
+        });
+      }
+
+      
+      function sendMessage() {
+        const text = chatInput.value.trim();
+        if (!text) return;
+
+        const msgId =
+          Date.now().toString() + Math.random().toString(36).slice(2);
+
+        const msg = {
+          type: "chat",
+          id: msgId,
+          text,
+          senderId: myId,
+          timestamp: new Date().toISOString(),
+        };
+
+        
+        seenIds.add(msgId);
+        addMessageToChat(msg);
+
+        
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify(msg));
+        }
+
+        chatInput.value = "";
+      }
+
+      
+      function addMessageToChat(msg) {
+        const isMe = msg.senderId === myId;
+
+        const row = document.createElement("div");
+        row.className = "chat-row " + (isMe ? "me" : "other");
+
+        const bubble = document.createElement("div");
+        bubble.className = "bubble " + (isMe ? "bubble-me" : "bubble-other");
+        bubble.textContent = msg.text;
+
+        row.appendChild(bubble);
+        chatWindow.appendChild(row);
+        chatWindow.scrollTop = chatWindow.scrollHeight;
+      }
+
+      
+      window.addEventListener("load", setup);
+    </script>
+  </body>
+</html>
